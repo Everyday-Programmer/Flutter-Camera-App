@@ -1,24 +1,29 @@
-import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' show join;
-import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
+
+import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
+import 'package:path/path.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 List<CameraDescription> cameras = [];
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   cameras = await availableCameras();
-  runApp(CameraApp());
+  runApp(const MyApp());
 }
 
-class CameraApp extends StatelessWidget {
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Camera App',
-      theme: ThemeData.dark(),
+      title: 'Flutter Camera App',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+      ),
       home: CameraScreen(),
     );
   }
@@ -55,10 +60,7 @@ class _CameraScreenState extends State<CameraScreen> {
   }
 
   void initializeCamera(int index) async {
-    controller = CameraController(
-      cameras[index],
-      ResolutionPreset.medium,
-    );
+    controller = CameraController(cameras[index], ResolutionPreset.high);
 
     try {
       await controller.initialize();
@@ -71,6 +73,25 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
+  Future<void> takePicture(BuildContext context) async {
+    if (!controller.value.isInitialized) return;
+
+    final directory = Directory('/storage/emulated/0/Pictures/CameraApp');
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    final path = join(directory.path, 'IMG_$timestamp.png');
+    await File(path).create(recursive: true);
+
+    try {
+      await controller.takePicture().then((file) {
+        file.saveTo(path);
+        Navigator.push(context, MaterialPageRoute(builder: (_) => DisplayPictureScreen(imagePath: path)
+        ));
+      });
+    } catch (e) {
+      print('Error taking picture: $e');
+    }
+  }
+
   void switchCamera() async {
     final newIndex = (selectedCameraIndex + 1) % cameras.length;
 
@@ -79,31 +100,7 @@ class _CameraScreenState extends State<CameraScreen> {
     });
 
     await controller.dispose();
-
     initializeCamera(newIndex);
-  }
-
-  Future<void> takePicture(BuildContext context) async {
-    if (!controller.value.isInitialized) return;
-
-    final directory = Directory('/storage/emulated/0/Pictures/CameraApp');
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final path = join(directory.path, 'IMG_$timestamp.png');
-    await File(path).create(recursive: true);
-
-    try {
-      await controller.takePicture().then((file) {
-        file.saveTo(path);
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => DisplayPictureScreen(imagePath: path),
-          ),
-        );
-      });
-    } catch (e) {
-      print('Error taking picture: $e');
-    }
   }
 
   @override
@@ -119,14 +116,16 @@ class _CameraScreenState extends State<CameraScreen> {
     if (!permissionGranted) {
       return Scaffold(
         body: Center(
-          child: Text("Camera permission is required."),
+          child: Text('Please grant camera permission!'),
         ),
       );
     }
 
     if (!isInitialized) {
       return Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
       );
     }
 
@@ -135,9 +134,9 @@ class _CameraScreenState extends State<CameraScreen> {
         title: Text('Flutter Camera App'),
         actions: [
           IconButton(
-            icon: Icon(Icons.switch_camera_rounded),
-            onPressed: switchCamera,
-          ),
+              onPressed: switchCamera,
+              icon: Icon(Icons.switch_camera)
+          )
         ],
       ),
       body: SafeArea(
@@ -152,11 +151,11 @@ class _CameraScreenState extends State<CameraScreen> {
               right: 0,
               child: Center(
                 child: IconButton(
-                  icon: Icon(Icons.camera, size: 80, color: Colors.white),
-                  onPressed: () => takePicture(context),
+                    onPressed: () => takePicture(context),
+                    icon: Icon(Icons.camera, size: 80, color: Colors.white)
                 ),
               ),
-            ),
+            )
           ],
         ),
       ),
@@ -166,14 +165,17 @@ class _CameraScreenState extends State<CameraScreen> {
 
 class DisplayPictureScreen extends StatelessWidget {
   final String imagePath;
-
   const DisplayPictureScreen({super.key, required this.imagePath});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('Captured Image')),
-      body: Center(child: Image.file(File(imagePath))),
+      appBar: AppBar(
+        title: Text('Captured Image'),
+      ),
+      body: Center(
+        child: Image.file(File(imagePath)),
+      ),
     );
   }
 }
